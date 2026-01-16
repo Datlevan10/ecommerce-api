@@ -1,0 +1,373 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== ENUMS ====================
+
+enum CustomerStatus {
+  active
+  inactive
+  banned
+  @@map("customer_status")
+}
+
+enum AdminRole {
+  super_admin
+  admin
+  @@map("admin_role")
+}
+
+enum StaffRole {
+  manager
+  support
+  warehouse
+  @@map("staff_role")
+}
+
+enum CartStatus {
+  active
+  converted
+  abandoned
+  @@map("cart_status")
+}
+
+enum PaymentMethod {
+  cod
+  bank_transfer
+  stripe
+  paypal
+  @@map("payment_method")
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+  @@map("payment_status")
+}
+
+enum OrderStatus {
+  pending
+  processing
+  shipped
+  completed
+  cancelled
+  @@map("order_status")
+}
+
+// ==================== USER SYSTEM ====================
+
+// Customers table - for regular users/shoppers
+model Customer {
+  customerId      String          @id @default(cuid()) @map("customer_id")
+  fullName        String          @map("full_name")
+  email           String          @unique
+  phone           String?
+  passwordHash    String          @map("password_hash")
+  avatarUrl       String?         @map("avatar_url")
+  emailVerifiedAt DateTime?       @map("email_verified_at")
+  status          CustomerStatus  @default(active)
+  lastLoginAt     DateTime?       @map("last_login_at")
+  refreshToken    String?         @map("refresh_token")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+  
+  // Relations
+  carts           Cart[]
+  orders          Order[]
+  reviews         Review[]
+  favorites       ProductFavorite[]
+  
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+  @@map("customers")
+}
+
+// Admins table - for super admin users
+model Admin {
+  adminId      String     @id @default(cuid()) @map("admin_id")
+  name         String
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  role         AdminRole  @default(admin)
+  refreshToken String?    @map("refresh_token")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  
+  @@index([email])
+  @@index([role])
+  @@map("admins")
+}
+
+// Staffs table - for shop employees
+model Staff {
+  staffId      String     @id @default(cuid()) @map("staff_id")
+  name         String
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  role         StaffRole
+  isActive     Boolean    @default(true) @map("is_active")
+  refreshToken String?    @map("refresh_token")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@map("staffs")
+}
+
+// ==================== PRODUCT SYSTEM ====================
+
+// Category model for product categorization
+model Category {
+  categoryId   String    @id @default(cuid()) @map("category_id")
+  categoryName String    @map("category_name")
+  description  String?
+  parentId     String?   @map("parent_id")
+  slug         String    @unique
+  imageUrl     String?   @map("image_url")
+  isActive     Boolean   @default(true) @map("is_active")
+  sortOrder    Int       @default(0) @map("sort_order")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  
+  // Self-relation for category hierarchy
+  parent       Category? @relation("CategoryHierarchy", fields: [parentId], references: [categoryId])
+  children     Category[] @relation("CategoryHierarchy")
+  
+  // Relation to products
+  products     Product[]
+
+  @@index([parentId])
+  @@index([slug])
+  @@index([isActive])
+  @@map("categories")
+}
+
+// Product model for ecommerce clothing store
+model Product {
+  productId        String    @id @default(cuid()) @map("product_id")
+  categoryId       String    @map("category_id")
+  productName      String    @map("product_name")
+  description      String    @db.Text
+  color            Json      // Array of colors: ["Red", "Blue", "Green"]
+  size             Json      // Array of sizes: ["S", "M", "L", "XL", "XXL"]
+  image            Json      // Array of image URLs or image objects
+  oldPrice         Decimal?  @map("old_price") @db.Decimal(10, 2)
+  newPrice         Decimal   @map("new_price") @db.Decimal(10, 2)
+  totalReview      Int       @default(0) @map("total_review")
+  averageReview    Decimal   @default(0) @map("average_review") @db.Decimal(3, 1)
+  quantityInStock  Int?      @map("quantity_in_stock")
+  variant          Json?     // Complex variant data for combinations
+  note             String?
+  isActive         Boolean   @default(true) @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+  
+  // Relations
+  category         Category  @relation(fields: [categoryId], references: [categoryId])
+  cartDetails      CartDetail[]
+  orderDetails     OrderDetail[]
+  reviews          Review[]
+  favorites        ProductFavorite[]
+
+  @@index([categoryId])
+  @@index([productName])
+  @@index([newPrice])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("products")
+}
+
+// ==================== CART SYSTEM ====================
+
+// Carts table - each customer has one active cart
+model Cart {
+  cartId      String       @id @default(cuid()) @map("cart_id")
+  customerId  String       @map("customer_id")
+  status      CartStatus   @default(active)
+  totalAmount Decimal      @default(0) @map("total_amount") @db.Decimal(10, 2)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  
+  // Relations
+  customer    Customer     @relation(fields: [customerId], references: [customerId])
+  cartDetails CartDetail[]
+  
+  // Unique constraint: only one active cart per customer
+  @@unique([customerId, status])
+  @@index([customerId])
+  @@index([status])
+  @@map("carts")
+}
+
+// Cart details - items inside a cart
+model CartDetail {
+  cartDetailId   String    @id @default(cuid()) @map("cart_detail_id")
+  cartId         String    @map("cart_id")
+  productId      String    @map("product_id")
+  quantity       Int
+  selectedColor  String?   @map("selected_color")
+  selectedSize   String?   @map("selected_size")
+  priceAtTime    Decimal   @map("price_at_time") @db.Decimal(10, 2)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  cart           Cart      @relation(fields: [cartId], references: [cartId], onDelete: Cascade)
+  product        Product   @relation(fields: [productId], references: [productId])
+  
+  // Unique: same product + variant combo in a cart
+  @@unique([cartId, productId, selectedColor, selectedSize])
+  @@index([cartId])
+  @@index([productId])
+  @@map("cart_details")
+}
+
+// ==================== ORDER SYSTEM ====================
+
+// Orders table
+model Order {
+  orderId         String         @id @default(cuid()) @map("order_id")
+  customerId      String         @map("customer_id")
+  orderCode       String         @unique @map("order_code")
+  totalAmount     Decimal        @map("total_amount") @db.Decimal(10, 2)
+  subtotal        Decimal        @default(0) @db.Decimal(10, 2)
+  shippingFee     Decimal        @default(0) @map("shipping_fee") @db.Decimal(10, 2)
+  discount        Decimal        @default(0) @db.Decimal(10, 2)
+  paymentMethod   PaymentMethod  @map("payment_method")
+  paymentStatus   PaymentStatus  @default(pending) @map("payment_status")
+  orderStatus     OrderStatus    @default(pending) @map("order_status")
+  shippingAddress Json           @map("shipping_address") // JSON with full address details
+  note            String?
+  processedAt     DateTime?      @map("processed_at")
+  shippedAt       DateTime?      @map("shipped_at")
+  completedAt     DateTime?      @map("completed_at")
+  cancelledAt     DateTime?      @map("cancelled_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  
+  // Relations
+  customer        Customer       @relation(fields: [customerId], references: [customerId])
+  orderDetails    OrderDetail[]
+  
+  @@index([customerId])
+  @@index([orderCode])
+  @@index([orderStatus])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// Order details - snapshot of products at purchase time
+model OrderDetail {
+  orderDetailId  String    @id @default(cuid()) @map("order_detail_id")
+  orderId        String    @map("order_id")
+  productId      String    @map("product_id")
+  productName    String    @map("product_name") // Snapshot at purchase time
+  quantity       Int
+  price          Decimal   @db.Decimal(10, 2) // Price at purchase time
+  selectedColor  String?   @map("selected_color")
+  selectedSize   String?   @map("selected_size")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  order          Order     @relation(fields: [orderId], references: [orderId])
+  product        Product   @relation(fields: [productId], references: [productId])
+  
+  // Unique constraint: prevent duplicate product+variant in same order
+  @@unique([orderId, productId, selectedColor, selectedSize])
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_details")
+}
+
+// ==================== FEATURE TABLES ====================
+
+// Product favorites/wishlist
+model ProductFavorite {
+  favoriteId  String    @id @default(cuid()) @map("favorite_id")
+  customerId  String    @map("customer_id")
+  productId   String    @map("product_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  customer    Customer  @relation(fields: [customerId], references: [customerId])
+  product     Product   @relation(fields: [productId], references: [productId])
+  
+  // Unique constraint: one favorite per product per customer
+  @@unique([customerId, productId])
+  @@index([customerId])
+  @@index([productId])
+  @@map("product_favorites")
+}
+
+// Reviews table
+model Review {
+  reviewId    String    @id @default(cuid()) @map("review_id")
+  productId   String    @map("product_id")
+  customerId  String    @map("customer_id")
+  orderId     String?   @map("order_id") // Link to verify purchase
+  rating      Int       // 1-5 stars
+  comment     String?   @db.Text
+  images      Json?     // Array of review image URLs
+  isApproved  Boolean   @default(false) @map("is_approved")
+  approvedAt  DateTime? @map("approved_at")
+  approvedBy  String?   @map("approved_by") // admin or staff ID
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  product     Product   @relation(fields: [productId], references: [productId])
+  customer    Customer  @relation(fields: [customerId], references: [customerId])
+  
+  // Unique constraint: one review per product per customer
+  @@unique([productId, customerId])
+  @@index([productId])
+  @@index([customerId])
+  @@index([isApproved])
+  @@index([rating])
+  @@map("reviews")
+}
+
+// ==================== AUTHENTICATION & TOKENS ====================
+
+// Email verification tokens
+model EmailVerificationToken {
+  id         String    @id @default(cuid())
+  token      String    @unique
+  email      String
+  expiresAt  DateTime  @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  
+  @@index([token])
+  @@index([email])
+  @@map("email_verification_tokens")
+}
+
+// Password reset tokens
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  token      String    @unique
+  email      String
+  userType   String    @map("user_type") // customer, admin, staff
+  expiresAt  DateTime  @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  
+  @@index([token])
+  @@index([email])
+  @@map("password_reset_tokens")
+}
