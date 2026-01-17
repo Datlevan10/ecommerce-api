@@ -5,6 +5,7 @@ import productRoutes from './modules/product/product.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import cartRoutes from './modules/cart/cart.routes.js';
 import customerRoutes from './modules/customer/customer.routes.js';
+import shopRoutes from './modules/shop/shop.routes.js';
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/shop', shopRoutes);
 
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

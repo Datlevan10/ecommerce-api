@@ -63,6 +63,41 @@ enum OrderStatus {
   @@map("order_status")
 }
 
+// ==================== SHOP SYSTEM ====================
+
+// Shop model - stores app-level/store information
+model Shop {
+  shopId        String    @id @default(cuid()) @map("shop_id")
+  shopName      String    @map("shop_name")
+  shopCode      String    @unique @map("shop_code") // Unique identifier like "SHOP001"
+  logoUrl       String?   @map("logo_url")
+  bannerImages  Json?     @map("banner_images") // Array of banner URLs
+  description   String?   @db.Text
+  email         String
+  phone         String
+  websiteUrl    String?   @map("website_url")
+  address       Json      // {street, city, state, country, zip}
+  socialLinks   Json?     @map("social_links") // {facebook, instagram, tiktok, twitter}
+  currencyCode  String    @default("USD") @map("currency_code")
+  timezone      String    @default("UTC")
+  language      String    @default("en")
+  taxNumber     String?   @map("tax_number") // For invoices
+  businessName  String?   @map("business_name") // Legal business name
+  metadata      Json?     // Additional flexible data
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  // Future-proof relations (currently optional, for multi-shop later)
+  // products     Product[]  @relation("ShopProducts")
+  // orders       Order[]    @relation("ShopOrders")
+  // customers    Customer[] @relation("ShopCustomers")
+  
+  @@index([shopCode])
+  @@index([isActive])
+  @@map("shops")
+}
+
 // ==================== USER SYSTEM ====================
 
 // Customers table - for regular users/shoppers
